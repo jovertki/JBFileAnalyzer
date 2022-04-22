@@ -4,11 +4,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
-
-import static java.util.Comparator.naturalOrder;
 
 
 interface SearchStrategy {
@@ -129,7 +126,6 @@ class Utils {
         byte[] data = new byte[0];
         try {
             File temp = new File(fileName);
-            //File temp = new File(rootName + "/" + fileName);
             if (temp.isFile()) {
                 data = Files.readAllBytes(temp.toPath());
             }
@@ -145,15 +141,11 @@ class Analyzer {
 
     FilePattern[] filePatterns;
     File[] files;
-    //String fileContent;
     SearchStrategy algorithm;
     String rootName;
 
     void initPatterns(String fileName) {
         String[] lines = Utils.readFileToString(fileName).split("\\n");
-
-
-
         FilePattern[] out = new FilePattern[lines.length];
         for (int i = 0; i < lines.length; i ++) {
             String[] temp = lines[i].replaceAll("\"", "").split(";", 0);
@@ -190,7 +182,6 @@ class Analyzer {
         catch (ExecutionException e) {
             e.printStackTrace();
         }
-
     }
 }
 
