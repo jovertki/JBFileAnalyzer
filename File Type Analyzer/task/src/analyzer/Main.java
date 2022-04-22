@@ -5,18 +5,21 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
+import java.util.*;
+import java.util.concurrent.*;
+
+import static java.util.Comparator.naturalOrder;
 
 
 interface SearchStrategy {
-    public boolean findSubstr(String text, String pattern);
+    boolean findSubstr(String text, String pattern);
 }
 
 class KMPSearch implements SearchStrategy {
 
     int[] prefixFunction(String str) {
         char[] s = str.toCharArray();
-        int n = (int)s.length;
+        int n = s.length;
         int[] pi = new int[n];
         for (int i = 1; i < n; i++) {
             int j = pi[i-1];
@@ -63,54 +66,143 @@ class KMPSearch implements SearchStrategy {
 
 }
 
+class FilePattern implements Comparable<FilePattern>{
+    public int priority;
+    public String pattern;
+    public String fileType;
+
+    FilePattern(int n, String pattern, String type) {
+        this.priority = n;
+        this.pattern = pattern;
+        this.fileType = type;
+    }
+
+    @Override
+    public int compareTo(FilePattern o) {
+        return Integer.compare(priority, o.priority);
+    }
+}
+
+class FileChecker implements Callable<String> {
+    FilePattern[] filePatterns;
+    String fileContent;
+    SearchStrategy algorithm;
+    String fileName;
+    String rootName;
+
+    FileChecker(String fileName, SearchStrategy algorithm, FilePattern[] filePatterns, String rootName) {
+        this.fileName = fileName;
+        this.algorithm = algorithm;
+        this.rootName = rootName;
+        this.filePatterns = filePatterns;
+        byte[] data = new byte[0];
+        try {
+            File temp = new File(rootName + "/" + fileName);
+            if (temp.isFile()) {
+                data = Files.readAllBytes(temp.toPath());
+            }
+        } catch (RuntimeException | IOException e) {
+            System.out.println(e.getMessage());
+            System.out.println("LOLKEKW");
+        }
+        this.fileContent = new String(data, StandardCharsets.UTF_8);
+
+    }
+
+    @Override
+    public String call() {
+        StringBuilder out = new StringBuilder(fileName + ": ");
+        String type = null;
+        for (FilePattern filePattern : filePatterns) {
+            if (algorithm.findSubstr(fileContent, filePattern.pattern)) {
+                type = filePattern.fileType;
+                break;
+            }
+        }
+        out.append(Objects.requireNonNullElse(type, "Unknown file type"));
+        return out.toString();
+    }
+}
+
+class Utils {
+    static public String readFileToString(String fileName) {
+        byte[] data = new byte[0];
+        try {
+            File temp = new File(fileName);
+            //File temp = new File(rootName + "/" + fileName);
+            if (temp.isFile()) {
+                data = Files.readAllBytes(temp.toPath());
+            }
+        } catch (RuntimeException | IOException e) {
+            System.out.println(e.getMessage());
+            System.out.println("LOLKEKW");
+        }
+        return new String(data, StandardCharsets.UTF_8);
+    }
+}
+
 class Analyzer {
-    String pattern;
-    String fileType;
+
+    FilePattern[] filePatterns;
     File[] files;
     //String fileContent;
     SearchStrategy algorithm;
+    String rootName;
 
-    Analyzer(String[] args) {
-        this.algorithm = new KMPSearch();
-        //this.pattern = "ABBA";
-        this.pattern = args[1];
-        this.fileType = args[2];
-        byte[] data = new byte[0];
-        try {
-            data = Files.readAllBytes(new File(args[1]).toPath());
-        } catch (RuntimeException | IOException e) {
-            System.out.println(e.getMessage());
+    void initPatterns(String fileName) {
+        String[] lines = Utils.readFileToString(fileName).split("\\n");
+
+
+
+        FilePattern[] out = new FilePattern[lines.length];
+        for (int i = 0; i < lines.length; i ++) {
+            String[] temp = lines[i].replaceAll("\"", "").split(";", 0);
+            out[i] = new FilePattern(Integer.parseInt(temp[0]), temp[1], temp[2]);
         }
-        files = new File(args[0]).listFiles();
-        //this.fileContent = new String(data, StandardCharsets.UTF_8);
+
+        Arrays.sort(out, Collections.reverseOrder());
+        filePatterns = out;
     }
 
-    public String execute() {
-        if (algorithm.findSubstr(fileContent, pattern)) {
-            return fileType;
-        } else {
-            return "Unknown file type";
+
+
+    Analyzer(String[] args) {
+        initPatterns(args[1]);
+        this.algorithm = new KMPSearch();
+        //this.pattern = "ABBA";
+        this.rootName = args[0];
+        files = new File(args[0]).listFiles();
+    }
+
+    public void execute() {
+        ExecutorService executor = Executors.newFixedThreadPool(files.length);
+        List<Callable<String>> callables = new ArrayList<>();
+
+        for (File file : files) {
+            callables.add(new FileChecker(file.getName(), algorithm, filePatterns, rootName));
         }
+        try {
+            List<Future<String>> futures = executor.invokeAll(callables);
+            for (Future<String> future : futures) {
+                System.out.println(future.get());
+            }
+        } catch (InterruptedException ignore) {}
+        catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+
     }
 }
 
 public class Main {
-    String pattern;
-    String fileType;
-    String fileContent;
-    SearchStrategy algorithm;
-
-
 
     public static void main(String[] args) {
-        if (args.length != 3) {
+        if (args.length != 2) {
             //ERROR
             return;
         }
         Analyzer a = new Analyzer(args);
-        long begin = System.nanoTime();
-        System.out.println(a.execute());
-        double diff = (System.nanoTime() - (double) begin) / 1_000_000_000;
-        System.out.printf("It took %f seconds\n", diff);
+        a.execute();
+
     }
 }
