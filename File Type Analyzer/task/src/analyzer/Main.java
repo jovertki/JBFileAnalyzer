@@ -12,7 +12,59 @@ interface SearchStrategy {
     boolean findSubstr(String text, String pattern);
 }
 
+class RKSearch implements SearchStrategy {
+
+    long a = 3;
+    long m = 127;
+
+
+    long findHash(String str) {
+        char[] chars = str.toCharArray();
+        long out = 0;
+        for (int i = 0; i < chars.length; i++) {
+            out += chars[i] * (long) Math.pow(a, i);
+        }
+        return out % m;
+    }
+
+    long findNextHash(char newC, char oldC, long hash, int pLen) {
+        long out = ((hash - oldC * (long) Math.pow(a, (pLen - 1))) * a + newC) % m;
+        out = (out % m + m) % m;
+        return out;
+    }
+
+    @Override
+    public boolean findSubstr(String text, String pattern) {
+
+        long pHash = findHash(pattern);
+        int begin = text.length() - pattern.length();
+        if (begin < 0 || text.length() < pattern.length()) {
+            return false;
+        }
+        long tempHash = findHash(text.substring(begin));
+        String temp = text.substring(begin);
+        if (text.substring(begin).equals(pattern)) {
+            return true;
+        }
+        for (int i = begin - 1; i >= -1; i--) {
+            if (tempHash == pHash) {
+                if (temp.equals(pattern)) {
+                    return true;
+                }
+            }
+            if (i != -1) {
+                char prev = temp.charAt(temp.length() - 1);
+                temp = text.substring(i, i + pattern.length());
+                char next = temp.charAt(0);
+                tempHash = findNextHash(next, prev, tempHash, pattern.length());
+            }
+        }
+        return false;
+    }
+}
+
 class KMPSearch implements SearchStrategy {
+
 
     int[] prefixFunction(String str) {
         char[] s = str.toCharArray();
@@ -160,7 +212,8 @@ class Analyzer {
 
     Analyzer(String[] args) {
         initPatterns(args[1]);
-        this.algorithm = new KMPSearch();
+        this.algorithm = new RKSearch();
+        //this.algorithm = new KMPSearch();
         //this.pattern = "ABBA";
         this.rootName = args[0];
         files = new File(args[0]).listFiles();
